@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: intelliheal
+    runtime: python
+    buildCommand: ./render-build.sh
+    startCommand: gunicorn --chdir server app:app

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, send_from_directory
 from flask_cors import CORS
 import numpy as np
 import pandas as pd
@@ -20,7 +20,11 @@ from dotenv import load_dotenv
 # Load environment variables from .env.local
 load_dotenv('.env.local')
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    static_folder="../dist",
+    static_url_path="/"
+)
 CORS(app)
 
 # =========================
@@ -146,103 +150,16 @@ def health_check():
 
 @app.route("/")
 def home():
-    return """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IntelliHealth - AI-Powered Recovery</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">IntelliHealth</h1>
-            <p class="text-gray-600">Your AI-powered recovery companion</p>
-        </header>
+    if os.path.exists(os.path.join(app.static_folder, "index.html")):
+        return send_from_directory(app.static_folder, "index.html")
+    return jsonify({"status": "ok", "message": "IntelliHeal API Server running"}), 200
 
-        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h3 class="text-xl font-semibold mb-4">User Metrics</h3>
-                <div id="metrics" class="space-y-2">
-                    <p>Loading metrics...</p>
-                </div>
-            </div>
-
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h3 class="text-xl font-semibold mb-4">Upload Dataset</h3>
-                <form id="uploadForm" enctype="multipart/form-data">
-                    <input type="file" name="file" accept=".csv" class="mb-4" required>
-                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                        Upload & Analyze
-                    </button>
-                </form>
-                <div id="results" class="mt-4 hidden">
-                    <h4 class="font-semibold">Analysis Results:</h4>
-                    <div id="metrics-results"></div>
-                </div>
-            </div>
-
-            <div class="bg-white p-6 rounded-lg shadow-md">
-                <h3 class="text-xl font-semibold mb-4">Quick Actions</h3>
-                <button onclick="getMetrics()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mb-2 w-full">
-                    Refresh Metrics
-                </button>
-                <a href="/upload" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 inline-block w-full text-center">
-                    Full Dashboard
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        async function getMetrics() {
-            try {
-                const response = await fetch('/api/metrics');
-                const data = await response.json();
-                document.getElementById('metrics').innerHTML = `
-                    <p><strong>Sober Days:</strong> ${data.sober_days}</p>
-                    <p><strong>Current Streak:</strong> ${data.current_streak} days</p>
-                    <p><strong>Total Points:</strong> ${data.total_points}</p>
-                    <p><strong>Relapse Probability:</strong> ${data.relapse_probability}%</p>
-                `;
-            } catch (error) {
-                document.getElementById('metrics').innerHTML = '<p class="text-red-500">Error loading metrics</p>';
-            }
-        }
-
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                const html = await response.text();
-                
-                // Extract metrics from HTML (simple parsing)
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const metricsDiv = doc.querySelector('.metrics');
-                
-                if (metricsDiv) {
-                    document.getElementById('results').classList.remove('hidden');
-                    document.getElementById('metrics-results').innerHTML = metricsDiv.innerHTML;
-                }
-            } catch (error) {
-                alert('Error uploading file');
-            }
-        });
-
-        // Load metrics on page load
-        getMetrics();
-    </script>
-</body>
-</html>
-"""
+@app.route("/<path:path>")
+def static_proxy(path):
+    file_path = os.path.join(app.static_folder, path)
+    if os.path.exists(file_path):
+        return send_from_directory(app.static_folder, path)
+    return send_from_directory(app.static_folder, "index.html")
 
 @app.route("/api/upload", methods=["POST"])
 def api_upload():
