@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Bot, User, Mic, MicOff, Volume2, VolumeX, Sparkles, Trash2, MessageSquare, Download, Search, X, Copy, ThumbsUp, ThumbsDown, Code, FileText, Zap, Heart, Brain, Activity, Radio, Languages } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
+import { genAiService } from '../services/genAiService';
 
 // Language detection and mapping
 const LANGUAGE_MAP = {
@@ -34,7 +35,11 @@ interface Message {
   reaction?: string;
 }
 
-const ChatBot: React.FC = () => {
+interface ChatBotProps {
+  onNavigate?: (tab: string) => void;
+}
+
+const ChatBot: React.FC<ChatBotProps> = ({ onNavigate }) => {
   const { showToast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -514,59 +519,105 @@ const ChatBot: React.FC = () => {
 
     setInput('');
     setMessages(prev => [...prev, {
-      role: 'user',
+      role: 'user' as const,
       text: userMessage,
       language: userLang,
       timestamp: new Date(),
-      sentiment
+      sentiment,
     }]);
     setIsLoading(true);
     setIsTyping(true);
 
-    try {
-      const response = await fetch('http://127.0.0.1:5000/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage,
-          language: userLang
-        })
-      });
+    // --- VOICE NAVIGATION INTERCEPT ---
+    const lowerMsg = userMessage.toLowerCase();
+    const isNavCommand = lowerMsg.includes('open') || lowerMsg.includes('go to') ||
+      lowerMsg.includes('navigate') || lowerMsg.includes('take me to') ||
+      lowerMsg.includes('show me');
 
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    if (isNavCommand && onNavigate) {
+      const routes = [
+        { keywords: ['wellness', 'exercise', 'workout', 'yoga', 'stretch'], tab: 'wellness', name: 'Wellness Plan & Exercises' },
+        { keywords: ['dashboard', 'home', 'main'], tab: 'dashboard', name: 'Dashboard' },
+        { keywords: ['profile', 'account', 'my details'], tab: 'profile', name: 'Profile' },
+        { keywords: ['progress', 'tracker', 'stats'], tab: 'progress', name: 'Progress Tracker' },
+        { keywords: ['report', 'health report'], tab: 'health-reports', name: 'Health Reports' },
+        { keywords: ['video', 'therapy', 'telehealth', 'counselor'], tab: 'telehealth', name: 'Video Therapy' },
+        { keywords: ['music', 'sound', 'relaxing music'], tab: 'music-therapy', name: 'Music Therapy' },
+        { keywords: ['survey', 'assessment', 'test'], tab: 'survey', name: 'Self Assessment' }
+      ];
 
-      const data = await response.json();
-      const botResponse = data.text || "I'm thinking...";
-      const responseLang = data.language || userLang;
+      for (const route of routes) {
+        if (route.keywords.some(kw => lowerMsg.includes(kw))) {
+          const reply = `Right away. Opening the ${route.name} for you.`;
+          setIsTyping(false);
+          setMessages(prev => [...prev, {
+            role: 'model' as const,
+            text: reply,
+            timestamp: new Date(),
+            sentiment: 'positive',
+          }]);
+          speak(reply, 'en-US');
 
-      // Simulate typing delay
-      setTimeout(() => {
-        setIsTyping(false);
-        setMessages(prev => [...prev, {
-          role: 'model',
-          text: botResponse,
-          language: responseLang,
-          timestamp: new Date(),
-          sentiment: analyzeSentiment(botResponse)
-        }]);
-        speak(botResponse, responseLang);
-      }, 800);
-
-    } catch (error) {
-      console.error("Chat Error:", error);
-      setIsTyping(false);
-      showToast("Connection error: Unable to reach AI service", "error");
-      const errorMsg = "I'm unable to reach the server. Please ensure the backend is running.";
-      setMessages(prev => [...prev, {
-        role: 'model',
-        text: errorMsg,
-        timestamp: new Date(),
-        sentiment: 'neutral'
-      }]);
-      speak(errorMsg, 'en-US');
-    } finally {
-      setIsLoading(false);
+          setTimeout(() => {
+            onNavigate(route.tab);
+          }, 1500); // Give it a second to speak before switching tabs
+          setIsLoading(false);
+          return;
+        }
+      }
     }
+    // ----------------------------------
+
+    // Pass conversation history to AI
+    const historyForAI = messages.map(m => ({ role: m.role, text: m.text }));
+
+    const aiResponse = await genAiService.chatWithAI(userMessage, historyForAI);
+
+    setIsTyping(false);
+
+    if (aiResponse) {
+      // AI responded successfully
+      setMessages(prev => [...prev, {
+        role: 'model' as const,
+        text: aiResponse,
+        language: userLang,
+        timestamp: new Date(),
+        sentiment: analyzeSentiment(aiResponse),
+      }]);
+      speak(aiResponse, userLang);
+    } else {
+      // Intelligent local fallback when network fails
+      const lower = userMessage.toLowerCase();
+      let reply: string;
+
+      if (lower.includes('alcohol') || lower.includes('drink') || lower.includes('beer') || lower.includes('wine') || lower.includes('liquor')) {
+        reply = "I understand you're feeling the pull toward alcohol right now — that craving is real, and acknowledging it takes strength. 💪\n\n**Try the HALT check:** Are you Hungry, Angry, Lonely, or Tired? These are the most common craving triggers.\n\n**Right now:**\n1. Drink a large glass of cold water slowly\n2. Step outside for 60 seconds of fresh air\n3. Call your sponsor or a trusted friend\n\nCravings peak at 15–20 minutes then pass like a wave. You've beaten this before — you can do it again. I'm right here with you.";
+      } else if (lower.includes('smok') || lower.includes('cigarette') || lower.includes('nicotine') || lower.includes('tobacco')) {
+        reply = "That nicotine craving is real and intense — but it WILL pass, usually within 20 minutes. You've got this. 🙌\n\n**Urge surfing:** Imagine the craving as a wave. Don't fight it — just observe it. Notice where you feel it in your body. Breathe through it.\n\n**4-7-8 breathing:** Inhale for 4 → Hold for 7 → Exhale for 8. This actively calms your nervous system within minutes.\n\nYou chose to reach out instead of giving in — that IS recovery in action.";
+      } else if (lower.includes('drug') || lower.includes('relapse') || lower.includes('using') || lower.includes('high')) {
+        reply = "I hear you — the urge to use is one of the hardest things in recovery, and your honesty right now is real courage.\n\n**HALT check:** Hungry? Angry? Lonely? Tired? One of these is likely underneath this urge.\n\n**Immediate action:** Move to a different physical location, text your sponsor, or call iCall India: **9152987821** — you don't have to white-knuckle this alone.\n\nWhat triggered this feeling today? Talk to me.";
+      } else if (lower.includes('anxiety') || lower.includes('anxious') || lower.includes('panic') || lower.includes('stress')) {
+        reply = "Your anxiety is valid — your nervous system is trying to protect you, even if it's overdoing it right now.\n\n**Box breathing — do this now:**\n🌬️ Breathe IN... 1... 2... 3... 4\n⏸️ HOLD... 1... 2... 3... 4\n💨 Breathe OUT... 1... 2... 3... 4\n⏸️ HOLD... 1... 2... 3... 4\n\nRepeat 4 times. You'll feel the difference in under 2 minutes — this directly activates your parasympathetic nervous system. You are safe. 💙";
+      } else if (lower.includes('sad') || lower.includes('depress') || lower.includes('hopeless') || lower.includes('give up') || lower.includes('cant do')) {
+        reply = "I'm really glad you reached out. What you're feeling is completely real — and you don't have to carry it alone.\n\nRecovery is not a straight line. Hard days don't erase the progress you've already made. Every single day you've shown up — even this one — counts.\n\n**One small step right now:** Name one tiny thing you can do in the next 5 minutes that's kind to yourself. Drink water. Open a window. Lie down. That counts.\n\nIf you're feeling very low, please reach out: iCall India **9152987821** 💙";
+      } else if (lower.includes('mental health') || lower.includes('tip') || lower.includes('advice') || lower.includes('help me')) {
+        reply = "Here are 3 powerful mental wellness actions for today:\n\n**1. 5-4-3-2-1 Grounding** — Name 5 things you SEE, 4 you FEEL, 3 you HEAR, 2 you SMELL, 1 you TASTE. Instant anxiety reset.\n\n**2. 10-minute movement** — Walk, stretch, or dance. Your brain gets a natural dopamine rush within minutes.\n\n**3. One genuine human connection** — Text someone you trust, even just 'thinking of you'. Human connection is the #1 protective factor in recovery.\n\nYou're here, you're trying — that matters more than you know. 🌟";
+      } else if (lower.includes('breath') || lower.includes('breathing') || lower.includes('calm') || lower.includes('relax')) {
+        reply = "Let's do box breathing together RIGHT NOW — follow along:\n\n🌬️ **Breathe IN** slowly... 1... 2... 3... 4\n⏸️ **HOLD** gently... 1... 2... 3... 4\n💨 **Breathe OUT** fully... 1... 2... 3... 4\n⏸️ **HOLD** softly... 1... 2... 3... 4\n\nRepeat this 4 times. Each cycle activates your vagus nerve — your body's built-in calm switch. You should feel noticeably calmer in under 2 minutes. You've got this. ✨";
+      } else {
+        reply = "I'm here and fully present with you. 🌿\n\nTell me more about what's going on — there's no rush and absolutely no judgment here. Whatever you're carrying right now, we can work through it together, one step at a time.";
+      }
+
+      setMessages(prev => [...prev, {
+        role: 'model' as const,
+        text: reply,
+        timestamp: new Date(),
+        sentiment: 'positive',
+      }]);
+      speak(reply, 'en-US');
+    }
+
+    setIsLoading(false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -599,27 +650,39 @@ const ChatBot: React.FC = () => {
       parts.push({ type: 'text', content: text.slice(lastIndex) });
     }
 
+    const formatMarkdown = (rawText: string) => {
+      // Basic Lightweight Markdown Parser for headers, bold, and lists
+      let html = rawText
+        .replace(/### (.*?)(?:\n|$)/g, '<h3 class="text-[17px] font-bold text-white/90 mt-5 mb-2">$1</h3>')
+        .replace(/## (.*?)(?:\n|$)/g, '<h2 class="text-[19px] font-extrabold text-white/95 mt-6 mb-3">$1</h2>')
+        .replace(/# (.*?)(?:\n|$)/g, '<h1 class="text-[22px] font-black text-white mt-6 mb-4">$1</h1>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em class="italic text-white/80">$1</em>')
+        .replace(/^- (.*?)(?:\n|$)/gm, '<li class="ml-5 list-disc mb-1 marker:text-cyan-400/70">$1</li>');
+      return html;
+    };
+
     if (parts.length === 0) {
-      return <p className="whitespace-pre-wrap text-[15px] leading-relaxed tracking-wide font-light opacity-95">{text}</p>;
+      return <div className="text-[15px] leading-relaxed tracking-wide font-light opacity-95 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: formatMarkdown(text) }} />;
     }
 
     return (
       <div className="space-y-2">
         {parts.map((part, idx) =>
           part.type === 'code' ? (
-            <div key={idx} className="relative">
+            <div key={idx} className="relative mt-2 mb-2">
               <div className="absolute top-2 right-2 flex gap-2">
-                <span className="text-[10px] text-slate-400 bg-black/30 px-2 py-1 rounded">{part.language}</span>
-                <button onClick={() => copyMessage(part.content)} className="text-slate-400 hover:text-white">
-                  <Copy size={12} />
+                <span className="text-[10px] text-slate-400 bg-black/40 px-2 py-1 rounded">{part.language}</span>
+                <button onClick={() => copyMessage(part.content)} className="text-slate-400 hover:text-white transition-colors">
+                  <Copy size={14} />
                 </button>
               </div>
-              <pre className="bg-black/30 p-4 rounded-lg overflow-x-auto text-sm">
+              <pre className="bg-black/40 p-4 rounded-xl overflow-x-auto text-sm border border-white/5">
                 <code>{part.content}</code>
               </pre>
             </div>
           ) : (
-            <p key={idx} className="whitespace-pre-wrap text-[15px] leading-relaxed tracking-wide font-light opacity-95">{part.content}</p>
+            <div key={idx} className="text-[15px] leading-relaxed tracking-wide font-light opacity-95 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: formatMarkdown(part.content) }} />
           )
         )}
       </div>

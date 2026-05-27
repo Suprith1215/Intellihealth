@@ -65,8 +65,8 @@ const FileTreeItem: React.FC<{
       <div
         onClick={handleClick}
         className={`flex items-center py-1.5 px-2 cursor-pointer transition-colors border-l-2 select-none ${activeFile === node.name && !isFolder
-            ? 'bg-slate-800 border-teal-500 text-teal-400'
-            : 'border-transparent hover:bg-slate-800/50 text-slate-300 hover:text-white'
+          ? 'bg-slate-800 border-teal-500 text-teal-400'
+          : 'border-transparent hover:bg-slate-800/50 text-slate-300 hover:text-white'
           }`}
         style={{ paddingLeft: `${depth * 12 + 10}px` }}
       >
@@ -274,8 +274,8 @@ const DeveloperHub: React.FC = () => {
                     <button
                       onClick={handleSave}
                       className={`flex items-center px-5 py-2 rounded shadow-lg transition-all transform hover:scale-105 ${isDirty
-                          ? 'bg-teal-600 text-white hover:bg-teal-700'
-                          : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                        ? 'bg-teal-600 text-white hover:bg-teal-700'
+                        : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                         }`}
                       disabled={!isDirty}
                     >
@@ -304,7 +304,7 @@ const DeveloperHub: React.FC = () => {
                 </span>
               </h2>
               <p className="text-slate-400 max-w-2xl mx-auto">
-                The AddictiveCare platform is powered by a sophisticated ensemble of 8 machine learning models,
+                The IntelliHeal platform is powered by a sophisticated ensemble of 8 machine learning models,
                 orchestrated to provide real-time risk assessment and personalized recovery pathways.
               </p>
             </div>

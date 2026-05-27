@@ -1,17 +1,17 @@
 
 import React, { useEffect, useState } from 'react';
-import { LineChart, Line, XAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, CartesianGrid, YAxis, Legend, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, Cell, CartesianGrid, YAxis, Legend } from 'recharts';
 import { AssessmentResult, UserProfile } from '../types';
 import { db } from '../services/databaseService';
 import { genAiService } from '../services/genAiService';
 import {
    AlertTriangle, MapPin, Zap, Flame, Crown,
-   ChevronRight, Trophy, Activity, Thermometer,
-   Shield, Signal, Wifi, Battery, Smile, Frown, Meh,
-   Leaf, Brain, Wind, Footprints, Waves
+   ChevronRight, Activity, Smile,
+   Leaf, Brain, Wind, Footprints, Waves,
+   TrendingUp, TrendingDown, Minus, Shield,
+   Sparkles, Heart, Target, Clock
 } from 'lucide-react';
 
-// New Components
 import { BoxBreathing, GroundingExercise, EmergencyButton, UrgeSurfing } from './InterventionTools';
 import { MindBalance3D, HydrationVisualizer, StressTopology } from './ThreeDVisuals';
 import { ExplainableRiskCard } from './ExplainableRisk';
@@ -24,46 +24,133 @@ interface DashboardProps {
    onNavigate?: (tab: string) => void;
 }
 
+// ── Inline Logo SVG ─────────────────────────────────────────────────────────
+const Logo = () => (
+   <svg width="28" height="28" viewBox="0 0 44 44" fill="none">
+      <defs>
+         <linearGradient id="dGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#7C3AED" />
+            <stop offset="100%" stopColor="#06B6D4" />
+         </linearGradient>
+      </defs>
+      <path d="M22 3L6 9.5V21C6 30.5 13 39 22 42C31 39 38 30.5 38 21V9.5L22 3Z"
+         fill="url(#dGrad)" fillOpacity="0.15" stroke="url(#dGrad)" strokeWidth="1.5" />
+      <circle cx="22" cy="21" r="4" fill="url(#dGrad)" opacity="0.9" />
+      <line x1="22" y1="13" x2="22" y2="29" stroke="url(#dGrad)" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="14" y1="21" x2="30" y2="21" stroke="url(#dGrad)" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="22" cy="13" r="2" fill="url(#dGrad)" opacity="0.7" />
+      <circle cx="22" cy="29" r="2" fill="url(#dGrad)" opacity="0.7" />
+      <circle cx="14" cy="21" r="2" fill="url(#dGrad)" opacity="0.7" />
+      <circle cx="30" cy="21" r="2" fill="url(#dGrad)" opacity="0.7" />
+   </svg>
+);
+
+// ── Stat Card ───────────────────────────────────────────────────────────────
+const StatCard: React.FC<{
+   icon: React.ReactNode;
+   label: string;
+   value: string | number;
+   sub?: string;
+   trend?: 'up' | 'down' | 'stable';
+   accentColor?: string;
+}> = ({ icon, label, value, sub, trend, accentColor = '#7C3AED' }) => (
+   <div className="stat-card animate-fade-in" style={{ height: '100%' }}>
+      <div style={{
+         position: 'absolute', top: 0, left: 0, right: 0, height: '2px', borderRadius: '16px 16px 0 0',
+         background: `linear-gradient(90deg, ${accentColor}, transparent)`
+      }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+         <div style={{
+            width: 40, height: 40, borderRadius: 12,
+            background: `${accentColor}18`,
+            border: `1px solid ${accentColor}30`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+         }}>
+            {icon}
+         </div>
+         {trend && (
+            <div style={{
+               display: 'flex', alignItems: 'center', gap: 4,
+               fontSize: 11, fontWeight: 600,
+               color: trend === 'up' ? '#34d399' : trend === 'down' ? '#f87171' : '#94a3b8'
+            }}>
+               {trend === 'up' ? <TrendingUp className="w-3 h-3" /> :
+                  trend === 'down' ? <TrendingDown className="w-3 h-3" /> :
+                     <Minus className="w-3 h-3" />}
+            </div>
+         )}
+      </div>
+      <div style={{ fontSize: '28px', fontWeight: 700, color: '#f0f4f8', lineHeight: 1, marginBottom: 4 }}>
+         {value}
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 500, color: 'rgba(148,163,184,0.7)', marginBottom: 2 }}>
+         {label}
+      </div>
+      {sub && <div style={{ fontSize: 11, color: 'rgba(148,163,184,0.4)' }}>{sub}</div>}
+   </div>
+);
+
+// ── Wellness Bar ─────────────────────────────────────────────────────────────
+const WellnessBar: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
+   <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+         <span style={{ fontSize: 13, color: 'rgba(226,232,240,0.8)', fontWeight: 500 }}>{label}</span>
+         <span style={{ fontSize: 13, fontWeight: 700, color }}>{value}%</span>
+      </div>
+      <div className="progress-bar-track">
+         <div
+            className="progress-bar-fill"
+            style={{ width: `${value}%`, background: `linear-gradient(90deg, ${color}aa, ${color})` }}
+         />
+      </div>
+   </div>
+);
+
+// ── Section Header ────────────────────────────────────────────────────────────
+const SectionHeader: React.FC<{ title: string; subtitle?: string; action?: React.ReactNode }> = ({ title, subtitle, action }) => (
+   <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div>
+         <h2 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginBottom: subtitle ? 3 : 0 }}>{title}</h2>
+         {subtitle && <p style={{ fontSize: 12, color: 'rgba(148,163,184,0.6)' }}>{subtitle}</p>}
+      </div>
+      {action}
+   </div>
+);
+
+// ── Main Dashboard ────────────────────────────────────────────────────────────
 const Dashboard: React.FC<DashboardProps> = ({ assessment, onNavigate }) => {
    const { showToast } = useToast();
+   const [user, setUser] = useState<UserProfile | null>(null);
+   const [aiMotivation, setAiMotivation] = useState('Loading your daily insight...');
+   const [isLocationActive, setIsLocationActive] = useState(false);
+   const [activeIntervention, setActiveIntervention] = useState<'urge' | 'calm' | null>(null);
+   const [showMetricsModal, setShowMetricsModal] = useState(false);
+   const [checkInComplete, setCheckInComplete] = useState(false);
    const [moodLevel, setMoodLevel] = useState(5);
    const [energyLevel, setEnergyLevel] = useState(5);
-   const [user, setUser] = useState<UserProfile | null>(null);
-   const [isLocationActive, setIsLocationActive] = useState(false);
-   const [aiMotivation, setAiMotivation] = useState("Loading your personalized insight...");
-   const [riskExplanation, setRiskExplanation] = useState<string | null>(null);
-   const [isExplainingRisk, setIsExplainingRisk] = useState(false);
 
-   const [checkInComplete, setCheckInComplete] = useState(false);
-   const [points, setPoints] = useState(850);
-   const [streak, setStreak] = useState(12);
-   const [chartData, setChartData] = useState([
-      { day: 'Mon', mood: 4, intensity: 8 },
-      { day: 'Tue', mood: 5, intensity: 6 },
-      { day: 'Wed', mood: 6, intensity: 7 },
-      { day: 'Thu', mood: 5, intensity: 5 },
-      { day: 'Fri', mood: 7, intensity: 4 },
-      { day: 'Sat', mood: 8, intensity: 3 },
-      { day: 'Sun', mood: 7, intensity: 4 },
+   const [xp] = useState(2450);
+   const nextLevelXp = 3000;
+   const [level] = useState(5);
+   const [streak] = useState(12);
+
+   const [chartData] = useState([
+      { day: 'Mon', mood: 4, intensity: 8, risk: 65 },
+      { day: 'Tue', mood: 5, intensity: 6, risk: 58 },
+      { day: 'Wed', mood: 6, intensity: 7, risk: 52 },
+      { day: 'Thu', mood: 5, intensity: 5, risk: 55 },
+      { day: 'Fri', mood: 7, intensity: 4, risk: 45 },
+      { day: 'Sat', mood: 8, intensity: 3, risk: 38 },
+      { day: 'Sun', mood: 7, intensity: 4, risk: 42 },
    ]);
 
-   const [rewards, setRewards] = useState([
-      { day: 1, val: "+10", claimed: true, active: false },
-      { day: 2, val: "+10", claimed: true, active: false },
-      { day: 3, val: "+15", claimed: true, active: false },
-      { day: 4, val: "+20", claimed: false, active: true },
-      { day: 5, val: "+25", claimed: false, active: false },
-      { day: 6, val: "+30", claimed: false, active: false },
-      { day: 7, val: "+100", claimed: false, active: false, big: true },
-   ]);
+   const riskFactors = [
+      { name: 'Sleep Patterns', impact: 85, trend: 'down' as const, description: 'Deep sleep duration reduced by 15% this week.' },
+      { name: 'Voice Sentiment', impact: 65, trend: 'stable' as const, description: 'Detected tonal flattening in recent journals.' },
+      { name: 'Stress Markers', impact: 45, trend: 'up' as const, description: 'Heart rate variability indicates mild stress.' },
+   ];
 
-   const [showSupportModal, setShowSupportModal] = useState(false);
-   const [activeIntervention, setActiveIntervention] = useState<'urge' | 'calm' | null>(null);
-
-   // Detailed Metrics State
-   const [showMetricsModal, setShowMetricsModal] = useState(false);
-
-   // Mock Data for ML Metrics
    const performanceData = [
       { name: 'Model A', acc: 92, prec: 89, recall: 94, f1: 91 },
       { name: 'Model B', acc: 88, prec: 85, recall: 87, f1: 86 },
@@ -73,20 +160,7 @@ const Dashboard: React.FC<DashboardProps> = ({ assessment, onNavigate }) => {
    const timeSeriesData = [
       { time: '00:00', acc: 85 }, { time: '04:00', acc: 88 },
       { time: '08:00', acc: 92 }, { time: '12:00', acc: 94 },
-      { time: '16:00', acc: 95 }, { time: '20:00', acc: 93 },
-      { time: '23:59', acc: 95 },
-   ];
-
-   // Gamification State
-   const [level, setLevel] = useState(5);
-   const [xp, setXp] = useState(2450);
-   const nextLevelXp = 3000;
-
-   // ... (riskFactors definition) ...
-   const riskFactors = [
-      { name: 'Sleep Patterns', impact: 85, trend: 'down' as const, description: 'Deep sleep duration reduced by 15% this week.' },
-      { name: 'Voice Sentiment', impact: 65, trend: 'stable' as const, description: 'Detected tonal flattening in recent journals.' },
-      { name: 'Stress Markers', impact: 45, trend: 'up' as const, description: 'Heart rate variability indicates mild stress.' },
+      { time: '16:00', acc: 95 }, { time: '20:00', acc: 93 }, { time: '23:59', acc: 95 },
    ];
 
    useEffect(() => {
@@ -97,464 +171,431 @@ const Dashboard: React.FC<DashboardProps> = ({ assessment, onNavigate }) => {
       }
    }, []);
 
-
-   const handleLevelUp = () => {
-      // Mock animation trigger
-      showToast("Level Up! You are now a Level 6 Guardian!", "success");
-   };
-
-   const handleCravingSupport = () => {
-      setShowSupportModal(true);
-   };
-
-   const toggleLocationMonitoring = () => {
-      setIsLocationActive(!isLocationActive);
-      if (!isLocationActive) {
-         showToast("Location Monitoring Active. You'll be alerted in high-risk zones.", "info");
-      } else {
-         showToast("Location Monitoring Paused.", "info");
-      }
-   };
-
    const handleMoodSubmit = () => {
-      const newData = [...chartData];
-      newData.shift();
-      newData.push({
-         day: 'Today',
-         mood: moodLevel,
-         intensity: Math.max(1, 10 - energyLevel)
-      });
-      setChartData(newData);
       setCheckInComplete(true);
-      showToast("Daily check-in logged successfully!", "success");
+      showToast('Daily check-in logged successfully!', 'success');
    };
 
-   const handleClaimReward = () => {
-      const activeIndex = rewards.findIndex(r => r.active && !r.claimed);
-      if (activeIndex !== -1) {
-         const rewardValue = parseInt(rewards[activeIndex].val.replace('+', ''));
-         setPoints(prev => prev + rewardValue);
-         const newRewards = [...rewards];
-         newRewards[activeIndex].claimed = true;
-         newRewards[activeIndex].active = false;
-         if (activeIndex + 1 < newRewards.length) {
-            newRewards[activeIndex + 1].active = true;
-         }
-         setRewards(newRewards);
-         setStreak(prev => prev + 1);
-
-         showToast(`🎉 Reward Claimed! +${rewardValue} points added.`, "success");
-      } else {
-         if (rewards.some(r => r.active)) return; // Should not happen if button disabled correctly
-         showToast("No rewards available to claim right now.", "error");
-      }
-   };
-
-   const handleExplainRisk = async () => {
-      if (riskExplanation) return;
-      setIsExplainingRisk(true);
-      // Simulate API delay for better UX
-      setTimeout(async () => {
-         const explanation = await genAiService.explainRisk(61, ["High Stress", "Poor Sleep", "Craving Spike"]);
-         setRiskExplanation(explanation);
-         setIsExplainingRisk(false);
-         showToast("Risk analysis complete.", "success");
-      }, 1500);
-   };
-
-   const handleQuickAction = (action: string) => {
-      if (onNavigate) {
-         if (action === 'Therapy') {
-            onNavigate('telehealth');
-            showToast("Navigating to Therapy portal...", "info");
-         }
-         else if (action === 'Progress') {
-            onNavigate('progress');
-            showToast("Opening Progress Tracker...", "info");
-         }
-         else if (action === 'Medication') {
-            showToast("Medication Reminder: No doses due now.", "info");
-         }
-         else if (action === 'Journal') {
-            // Maybe navigate to Journal or just show toast for now as route not explicitly checking 'journal' in quick action logic
-            showToast("Journal feature coming soon to quick actions!", "info");
-         }
-      }
+   const tooltipStyle = {
+      backgroundColor: 'rgba(12, 8, 30, 0.95)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: '10px',
+      fontSize: '12px',
+      color: '#e2e8f0',
    };
 
    return (
-      <div className="max-w-7xl mx-auto space-y-8 animate-fade-in pb-20">
+      <div className="animate-fade-in" style={{ maxWidth: 1400, margin: '0 auto' }}>
 
-         {/* --- HEADER & GAMIFICATION --- */}
-         <div className="flex flex-col md:flex-row items-end justify-between gap-6 pb-6 border-b border-white/5">
-            <div>
-               <div className="flex items-center mb-2">
-                  <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-                     Welcome back, {user?.name.split(' ')[0]}
-                  </h1>
-                  <span className="ml-4 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold uppercase tracking-wider">
-                     Level {level} Guardian
-                  </span>
+         {/* ── HERO HEADER ──────────────────────────────────────────── */}
+         <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 32, flexWrap: 'wrap', gap: 16,
+         }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+               <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #7C3AED 0%, #06B6D4 100%)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 22, fontWeight: 800, color: 'white',
+                  flexShrink: 0,
+                  boxShadow: '0 0 24px rgba(124,58,237,0.5)',
+                  border: '2px solid rgba(124,58,237,0.4)',
+               }}>
+                  {user?.name?.charAt(0) || 'U'}
                </div>
-               <p className="text-slate-400 max-w-xl italic flex items-start">
-                  <span className="mr-2 text-2xl text-purple-500">"</span>
-                  {aiMotivation}
-                  <span className="ml-2 text-2xl text-purple-500">"</span>
-               </p>
+               <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                     <h1 style={{
+                        fontSize: 26, fontWeight: 800, color: '#f0f4f8',
+                        letterSpacing: '-0.02em', lineHeight: 1,
+                     }}>
+                        Welcome back, {user?.name?.split(' ')[0] || 'Guardian'}
+                     </h1>
+                     <span className="badge badge-purple">Lvl {level} Guardian</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: 'rgba(148,163,184,0.7)', fontStyle: 'italic' }}>
+                     <Sparkles className="w-3.5 h-3.5 inline mr-1.5 text-purple-400" />
+                     {aiMotivation}
+                  </p>
+               </div>
             </div>
 
-            {/* Gamified Bar */}
-            <div className="w-full md:w-auto glass-card p-4 min-w-[300px]">
-               <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                  <span>Progress to Lvl {level + 1}</span>
+            {/* XP Progress Panel */}
+            <div style={{
+               padding: '16px 20px',
+               background: 'rgba(255,255,255,0.025)',
+               border: '1px solid rgba(255,255,255,0.07)',
+               borderRadius: 16, minWidth: 280,
+            }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'rgba(148,163,184,0.5)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>
+                  <span>Progress to Level {level + 1}</span>
                   <span>{xp} / {nextLevelXp} XP</span>
                </div>
-               <div className="w-full h-3 bg-[#0f0a1e] rounded-full overflow-hidden border border-white/5 relative">
-                  <div
-                     className="h-full bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 transition-all duration-1000 shadow-[0_0_15px_rgba(168,85,247,0.5)]"
-                     style={{ width: `${(xp / nextLevelXp) * 100}%` }}
-                  >
-                     <div className="absolute inset-0 bg-white/20 animate-shimmer"></div>
-                  </div>
+               <div className="progress-bar-track" style={{ height: 8, marginBottom: 12 }}>
+                  <div className="progress-bar-fill animate-shimmer" style={{ width: `${(xp / nextLevelXp) * 100}%` }} />
                </div>
-               <div className="flex justify-between mt-3">
-                  <div className="flex flex-col items-center">
-                     <span className="text-[10px] text-slate-500">STREAK</span>
-                     <span className="font-bold text-orange-400 flex items-center"><Flame className="w-3 h-3 mr-1 fill-orange-400" /> 12 Days</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                     <span className="text-[10px] text-slate-500">BALANCE</span>
-                     <span className="font-bold text-cyan-400 flex items-center"><Crown className="w-3 h-3 mr-1" /> Top 5%</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                     <span className="text-[10px] text-slate-500">MOOD</span>
-                     <span className="font-bold text-green-400 flex items-center"><Smile className="w-3 h-3 mr-1" /> Stable</span>
-                  </div>
+               <div style={{ display: 'flex', gap: 20 }}>
+                  {[
+                     { label: 'STREAK', value: `${streak} Days`, icon: <Flame className="w-3 h-3 fill-orange-400" />, color: '#fb923c' },
+                     { label: 'RANK', value: 'Top 5%', icon: <Crown className="w-3 h-3" />, color: '#22d3ee' },
+                     { label: 'MOOD', value: 'Stable', icon: <Smile className="w-3 h-3" />, color: '#34d399' },
+                  ].map(s => (
+                     <div key={s.label} style={{ textAlign: 'center', flex: 1 }}>
+                        <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.4)', letterSpacing: '0.08em', marginBottom: 3 }}>{s.label}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: s.color }}>
+                           {s.icon} {s.value}
+                        </div>
+                     </div>
+                  ))}
                </div>
             </div>
          </div>
 
-         {/* --- 3D WELLNESS VISUALIZATION --- */}
-         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="glass-card md:col-span-2 overflow-hidden relative group">
-               <div className="absolute top-4 left-6 z-10">
-                  <h3 className="text-xl font-bold text-white flex items-center">
-                     <Brain className="w-5 h-5 text-purple-400 mr-2" />
-                     Mind Balance Model
-                  </h3>
-                  <p className="text-slate-400 text-xs mt-1">Real-time neural stability visualization</p>
-               </div>
-               <MindBalance3D stability={85} />
+         {/* ── TOP STATS ROW ─────────────────────────────────────────── */}
+         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}
+            className="grid-cols-2 md:grid-cols-4">
+            <StatCard
+               icon={<Shield className="w-5 h-5" style={{ color: '#a78bfa' }} />}
+               label="Risk Score"
+               value={`${assessment?.riskScore ?? 45}%`}
+               sub="Relapse probability"
+               trend="down"
+               accentColor="#7C3AED"
+            />
+            <StatCard
+               icon={<Heart className="w-5 h-5" style={{ color: '#f472b6' }} />}
+               label="Wellness Score"
+               value="78"
+               sub="Out of 100"
+               trend="up"
+               accentColor="#EC4899"
+            />
+            <StatCard
+               icon={<Target className="w-5 h-5" style={{ color: '#22d3ee' }} />}
+               label="AI Accuracy"
+               value="95.4%"
+               sub="Model confidence"
+               trend="up"
+               accentColor="#06B6D4"
+            />
+            <StatCard
+               icon={<Clock className="w-5 h-5" style={{ color: '#fb923c' }} />}
+               label="Sober Days"
+               value={streak}
+               sub="Personal best: 30"
+               trend="up"
+               accentColor="#f97316"
+            />
+         </div>
 
-               <div className="absolute bottom-4 right-6 flex gap-2">
-                  <div className="glass-card-sm px-3 py-1 text-xs font-bold text-cyan-300 border-cyan-500/30">Stable State</div>
-                  <div className="glass-card-sm px-3 py-1 text-xs font-bold text-slate-400">Looking Good</div>
-               </div>
-            </div>
+         {/* ── MAIN GRID — 3D MIND MODEL + WELLNESS ─────────────────── */}
+         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, marginBottom: 24 }}>
 
-            <div className="glass-card p-6 flex flex-col justify-between">
-               <div>
-                  <h3 className="font-bold text-white mb-2 flex items-center"> <Leaf className="w-5 h-5 text-green-400 mr-2" /> Wellness Status</h3>
-                  <div className="space-y-4 mt-6">
-                     <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-300">Hydration</span>
-                        <span className="text-cyan-400 font-bold">60%</span>
+            {/* Mind Balance 3D */}
+            <div className="glass-card" style={{ overflow: 'hidden', position: 'relative', minHeight: 280 }}>
+               <div style={{ position: 'absolute', top: 18, left: 20, zIndex: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                     <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Brain className="w-4 h-4 text-purple-400" />
                      </div>
-                     <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-cyan-500 w-[60%]"></div>
-                     </div>
-
-                     <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-300">Sleep Recharge</span>
-                        <span className="text-purple-400 font-bold">82%</span>
-                     </div>
-                     <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-purple-500 w-[82%]"></div>
-                     </div>
-
-                     <div className="flex justify-between items-center">
-                        <span className="text-sm text-slate-300">Stress Load</span>
-                        <span className="text-amber-400 font-bold">Low</span>
-                     </div>
-                     <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-amber-500 w-[20%]"></div>
+                     <div>
+                        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>Mind Balance Model</h3>
+                        <p style={{ fontSize: 11, color: 'rgba(148,163,184,0.5)' }}>Real-time neural stability</p>
                      </div>
                   </div>
                </div>
+               <MindBalance3D stability={85} />
+               <div style={{ position: 'absolute', bottom: 14, right: 14, display: 'flex', gap: 8 }}>
+                  <span className="glass-card-sm badge badge-cyan" style={{ border: 'none' }}>Stable State</span>
+                  <span className="glass-card-sm" style={{ padding: '4px 10px', fontSize: 11, color: 'rgba(148,163,184,0.6)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>Looking Good</span>
+               </div>
+            </div>
+
+            {/* Wellness Status */}
+            <div className="glass-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                     <Leaf className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                     <h3 style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>Wellness Status</h3>
+                     <p style={{ fontSize: 11, color: 'rgba(148,163,184,0.5)' }}>Today's vitals</p>
+                  </div>
+               </div>
+
+               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <WellnessBar label="Hydration" value={60} color="#06B6D4" />
+                  <WellnessBar label="Sleep Recharge" value={82} color="#a78bfa" />
+                  <WellnessBar label="Stress Level" value={20} color="#f97316" />
+                  <WellnessBar label="Recovery Index" value={73} color="#34d399" />
+               </div>
+
                <button
                   onClick={() => setShowMetricsModal(true)}
-                  className="w-full mt-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-bold transition-all border border-white/10 hover:border-cyan-500/50 hover:text-cyan-400"
+                  className="btn-secondary"
+                  style={{ width: '100%', fontSize: 12, padding: '9px 16px' }}
                >
+                  <Activity className="w-3.5 h-3.5" />
                   View Detailed Metrics
                </button>
             </div>
          </div>
 
-         {/* --- MAIN DASHBOARD CONTENT --- */}
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+         {/* ── SECONDARY GRID — RISK, CHART, TOOLS ───────────────────── */}
+         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 320px', gap: 20, marginBottom: 24 }}>
 
-            {/* LEFT: INTERVENTION & TOOLS */}
-            <div className="space-y-6">
-               <div className="glass-card p-6 border-l-4 border-red-500 bg-gradient-to-r from-red-500/5 to-transparent">
-                  <h3 className="font-bold text-white mb-2 flex items-center">
-                     <Zap className="w-5 h-5 text-red-500 mr-2" /> Real-Time Intervention
-                  </h3>
-                  <p className="text-xs text-slate-400 mb-4">AI detected a 15% rise in craving markers.</p>
+            {/* Explainable Risk */}
+            <ExplainableRiskCard
+               riskScore={(() => {
+                  const raw = assessment?.riskScore ?? 45;
+                  const score = raw <= 1 ? Math.round(raw * 100) : Math.round(raw);
+                  return Math.min(100, Math.max(0, score));
+               })()}
+               features={riskFactors}
+               timeframe="Coming Week"
+            />
 
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                     <button
-                        onClick={() => setActiveIntervention('urge')}
-                        className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl hover:bg-red-500/20 text-red-400 font-bold text-xs transition-all text-left flex items-center gap-2"
-                     >
-                        <Flame className="w-4 h-4" />
-                        Survive Urge
-                     </button>
-                     <button
-                        onClick={() => setActiveIntervention('calm')}
-                        className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl hover:bg-cyan-500/20 text-cyan-400 font-bold text-xs transition-all text-left flex items-center gap-2"
-                     >
-                        <Wind className="w-4 h-4" />
-                        Calm Down
-                     </button>
-                     <button
-                        onClick={() => onNavigate?.('music-therapy')}
-                        className="col-span-2 p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl hover:bg-purple-500/20 text-purple-400 font-bold text-xs transition-all flex items-center justify-center gap-2"
-                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                        </svg>
-                        Music Therapy
-                     </button>
+            {/* Recovery Trajectory Chart */}
+            <div className="glass-card" style={{ padding: 24 }}>
+               <SectionHeader
+                  title="Recovery Trajectory"
+                  subtitle="7-day mood & risk trend"
+               />
+               <ResponsiveContainer width="100%" height={180}>
+                  <AreaChart data={chartData}>
+                     <defs>
+                        <linearGradient id="moodGrad" x1="0" y1="0" x2="0" y2="1">
+                           <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.3} />
+                           <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="riskGrad2" x1="0" y1="0" x2="0" y2="1">
+                           <stop offset="5%" stopColor="#EC4899" stopOpacity={0.25} />
+                           <stop offset="95%" stopColor="#EC4899" stopOpacity={0} />
+                        </linearGradient>
+                     </defs>
+                     <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                     <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: 'rgba(148,163,184,0.5)', fontSize: 11 }} />
+                     <YAxis hide />
+                     <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: 'rgba(255,255,255,0.08)' }} />
+                     <Area type="monotone" dataKey="mood" stroke="#7C3AED" strokeWidth={2.5} fill="url(#moodGrad)" dot={false} name="Mood" />
+                     <Area type="monotone" dataKey="risk" stroke="#EC4899" strokeWidth={2} fill="url(#riskGrad2)" strokeDasharray="4 2" dot={false} name="Risk %" />
+                  </AreaChart>
+               </ResponsiveContainer>
+               <div style={{ display: 'flex', gap: 16, marginTop: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#a78bfa' }}>
+                     <div style={{ width: 12, height: 2, borderRadius: 2, background: '#7C3AED' }} /> Mood
                   </div>
-
-                  <EmergencyButton contactName={user?.emergencyContact || "Sponsor"} onCall={() => showToast("Connecting to emergency contact...", "info")} />
-               </div>
-
-               <VoiceAnalysisRecorder />
-
-               <div className="glass-card p-6">
-                  <div className="flex justify-between items-center mb-4">
-                     <h3 className="font-bold text-white flex items-center">
-                        <MapPin className="w-5 h-5 text-purple-400 mr-2" /> Geo-Fence
-                     </h3>
-                     <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" checked={isLocationActive} onChange={() => setIsLocationActive(!isLocationActive)} className="sr-only peer" />
-                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                     </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#f472b6' }}>
+                     <div style={{ width: 12, height: 2, borderRadius: 2, background: '#EC4899', borderTop: '1px dashed #EC4899' }} /> Risk %
                   </div>
-                  <p className="text-xs text-slate-400">Alerts active for 3 known high-risk zones near current location.</p>
                </div>
             </div>
 
-            {/* CENTER: EXPLAINABLE AI & FORECAST */}
-            <div className="lg:col-span-2 space-y-6">
-               <ExplainableRiskCard
-                  riskScore={assessment?.riskScore || 45}
-                  features={riskFactors}
-                  timeframe="Coming Week"
-               />
+            {/* Quick Actions / Intervention Panel */}
+            <div className="glass-card" style={{ padding: 22 }}>
+               <SectionHeader title="Quick Actions" subtitle="Real-time support" />
 
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="glass-card p-6">
-                     <h4 className="text-sm font-bold text-slate-300 mb-4">Recovery Trajectory</h4>
-                     <ResponsiveContainer width="100%" height={200}>
-                        <LineChart data={chartData}>
-                           <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                           <Tooltip contentStyle={{ backgroundColor: '#1e1b4b', border: 'none', borderRadius: '8px' }} />
-                           <Line type="monotone" dataKey="mood" stroke="#8b5cf6" strokeWidth={3} dot={false} />
-                           <Line type="monotone" dataKey="intensity" stroke="#ec4899" strokeWidth={3} strokeDasharray="5 5" dot={false} />
-                        </LineChart>
-                     </ResponsiveContainer>
-                     <div className="flex justify-center gap-4 mt-2">
-                        <div className="flex items-center text-xs text-purple-400"><div className="w-2 h-2 rounded-full bg-purple-500 mr-2"></div>Mood</div>
-                        {/* Toast Notification Removed */}
+               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                     {
+                        label: 'Survive Urge',
+                        desc: 'Urge surfing technique',
+                        icon: <Flame className="w-4 h-4" />,
+                        color: '#ef4444',
+                        action: () => setActiveIntervention('urge')
+                     },
+                     {
+                        label: 'Calm Down',
+                        desc: 'Box breathing exercise',
+                        icon: <Wind className="w-4 h-4" />,
+                        color: '#06B6D4',
+                        action: () => setActiveIntervention('calm')
+                     },
+                     {
+                        label: 'Music Therapy',
+                        desc: 'Healing soundscapes',
+                        icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" /></svg>,
+                        color: '#a78bfa',
+                        action: () => onNavigate?.('music-therapy')
+                     },
+                  ].map((item) => (
+                     <button
+                        key={item.label}
+                        onClick={item.action}
+                        style={{
+                           display: 'flex', alignItems: 'center', gap: 12,
+                           padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                           background: `${item.color}12`,
+                           border: `1px solid ${item.color}25`,
+                           textAlign: 'left', width: '100%', transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${item.color}22`; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = `${item.color}12`; }}
+                     >
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: `${item.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.color, flexShrink: 0 }}>
+                           {item.icon}
+                        </div>
+                        <div>
+                           <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{item.label}</div>
+                           <div style={{ fontSize: 11, color: 'rgba(148,163,184,0.5)' }}>{item.desc}</div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 ml-auto opacity-30" style={{ color: item.color }} />
+                     </button>
+                  ))}
 
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '4px 0' }} />
+
+                  <EmergencyButton
+                     contactName={user?.emergencyContact || 'Sponsor'}
+                     onCall={() => showToast('Connecting to emergency contact...', 'info')}
+                  />
+               </div>
+
+               {/* Geo-fence toggle */}
+               <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <MapPin className="w-4 h-4 text-purple-400" />
+                        <div>
+                           <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>Geo-Fence</div>
+                           <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.4)' }}>3 risk zones monitored</div>
+                        </div>
                      </div>
+                     <label style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={isLocationActive} onChange={() => setIsLocationActive(!isLocationActive)} style={{ display: 'none' }} />
+                        <div style={{
+                           width: 36, height: 20, borderRadius: 999, position: 'relative',
+                           background: isLocationActive
+                              ? 'linear-gradient(135deg, #7C3AED, #06B6D4)'
+                              : 'rgba(255,255,255,0.1)',
+                           transition: 'background 0.3s',
+                           border: '1px solid rgba(255,255,255,0.1)',
+                        }}>
+                           <div style={{
+                              position: 'absolute', top: 2, left: isLocationActive ? 18 : 2,
+                              width: 14, height: 14, borderRadius: '50%', background: 'white',
+                              transition: 'left 0.3s', boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                           }} />
+                        </div>
+                     </label>
                   </div>
-
-                  <DataSourcesPanel />
                </div>
             </div>
          </div>
 
-         {/* --- INTERVENTION MODAL --- */}
-         {showSupportModal && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
-               <div className="bg-[#1a1429] w-full max-w-4xl rounded-3xl border border-white/10 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden relative">
-                  <button onClick={() => { setShowSupportModal(false); setActiveIntervention(null); }} className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/50 hover:bg-white/20 text-white transition-all">✕</button>
+         {/* ── VOICE, DATA SOURCES ROW ───────────────────────────────── */}
+         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+            <VoiceAnalysisRecorder />
+            <DataSourcesPanel />
+         </div>
 
-                  <div className="p-8 pb-0">
-                     <h2 className="text-3xl font-bold text-white mb-2">Immediate Support</h2>
-                     <p className="text-slate-400">Select a tool to regain balance.</p>
-                  </div>
-
-                  <div className="flex-1 p-8 overflow-y-auto">
-                     {!activeIntervention ? (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                           <button onClick={() => setActiveIntervention('breathing')} className="glass-card p-6 hover:border-cyan-500 transition-all text-left group">
-                              <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                 <Wind className="w-6 h-6 text-cyan-400" />
-                              </div>
-                              <h3 className="font-bold text-white text-lg">Box Breathing</h3>
-                              <p className="text-sm text-slate-400 mt-2">Reduce cortisol levels instantly.</p>
-                           </button>
-
-                           <button onClick={() => setActiveIntervention('grounding')} className="glass-card p-6 hover:border-purple-500 transition-all text-left group">
-                              <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                 <Footprints className="w-6 h-6 text-purple-400" />
-                              </div>
-                              <h3 className="font-bold text-white text-lg">5-4-3-2-1 Grounding</h3>
-                              <p className="text-sm text-slate-400 mt-2">Reconnect with reality.</p>
-                           </button>
-
-                           <button onClick={() => setActiveIntervention('surfing')} className="glass-card p-6 hover:border-blue-500 transition-all text-left group">
-                              <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                 <Waves className="w-6 h-6 text-blue-400" />
-                              </div>
-                              <h3 className="font-bold text-white text-lg">Urge Surfing</h3>
-                              <p className="text-sm text-slate-400 mt-2">Ride out intense cravings.</p>
-                           </button>
-                        </div>
-                     ) : (
-                        <div className="animate-slide-up h-full flex flex-col">
-                           <button onClick={() => setActiveIntervention(null)} className="flex items-center text-slate-400 hover:text-white mb-6 font-bold">
-                              <ChevronRight className="w-4 h-4 rotate-180 mr-1" /> Back to Tools
-                           </button>
-                           <div className="flex-1 flex items-center justify-center">
-                              {activeIntervention === 'breathing' && <BoxBreathing />}
-                              {activeIntervention === 'grounding' && <GroundingExercise />}
-                              {activeIntervention === 'surfing' && <UrgeSurfing />}
-                           </div>
-                        </div>
-                     )}
-                  </div>
-               </div>
-            </div>
-         )}
-
-         {/* --- METRICS MODAL --- */}
-         {showMetricsModal && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 animate-fade-in overflow-y-auto">
-               <div className="bg-[#0f0a1e] w-full max-w-6xl rounded-3xl border border-white/10 shadow-2xl flex flex-col max-h-[95vh] relative overflow-hidden">
-
-                  {/* Header */}
-                  <div className="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-slate-900 to-slate-900/50">
-                     <div>
-                        <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-                           <Activity className="w-8 h-8 text-cyan-400" />
-                           Model Performance Metrics
-                        </h2>
-                        <p className="text-slate-400">Real-time analysis of prediction accuracy, precision, and recall.</p>
-                     </div>
-                     <button onClick={() => setShowMetricsModal(false)} className="p-3 rounded-full bg-white/5 hover:bg-white/20 text-white transition-all">✕</button>
-                  </div>
-
-                  <div className="p-8 overflow-y-auto space-y-8">
-                     {/* Top Stats */}
-                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="glass-card p-4 text-center border-t-4 border-green-500">
-                           <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Accuracy</h4>
-                           <div className="text-4xl font-bold text-white">95.4%</div>
-                           <div className="text-green-400 text-xs mt-1">↑ 2.1% vs last week</div>
-                        </div>
-                        <div className="glass-card p-4 text-center border-t-4 border-blue-500">
-                           <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Precision</h4>
-                           <div className="text-4xl font-bold text-white">93.2%</div>
-                           <div className="text-blue-400 text-xs mt-1">High Confidence</div>
-                        </div>
-                        <div className="glass-card p-4 text-center border-t-4 border-purple-500">
-                           <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">Recall</h4>
-                           <div className="text-4xl font-bold text-white">96.1%</div>
-                           <div className="text-purple-400 text-xs mt-1">Minimal Misses</div>
-                        </div>
-                        <div className="glass-card p-4 text-center border-t-4 border-pink-500">
-                           <h4 className="text-slate-400 text-xs uppercase tracking-wider mb-2">F1 Score</h4>
-                           <div className="text-4xl font-bold text-white">94.6%</div>
-                           <div className="text-pink-400 text-xs mt-1">Balanced</div>
-                        </div>
-                     </div>
-
-                     {/* Charts Grid */}
-                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-                        {/* Accuracy Trend */}
-                        <div className="glass-card p-6">
-                           <h3 className="text-lg font-bold text-white mb-6 pl-2 border-l-4 border-cyan-500">Validation Accuracy Over Time</h3>
-                           <ResponsiveContainer width="100%" height={300}>
-                              <AreaChart data={timeSeriesData}>
-                                 <defs>
-                                    <linearGradient id="colorAcc" x1="0" y1="0" x2="0" y2="1">
-                                       <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
-                                       <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
-                                    </linearGradient>
-                                 </defs>
-                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                                 <XAxis dataKey="time" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                 <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} domain={[80, 100]} />
-                                 <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e1b4b', border: '1px solid #ffffff10', borderRadius: '8px' }}
-                                    itemStyle={{ color: '#fff' }}
-                                 />
-                                 <Area type="monotone" dataKey="acc" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#colorAcc)" />
-                              </AreaChart>
-                           </ResponsiveContainer>
-                        </div>
-
-                        {/* Metrics Comparison */}
-                        <div className="glass-card p-6">
-                           <h3 className="text-lg font-bold text-white mb-6 pl-2 border-l-4 border-purple-500">Model Comparison (F1, Precision, Recall)</h3>
-                           <ResponsiveContainer width="100%" height={300}>
-                              <BarChart data={performanceData} barGap={0} barCategoryGap="20%">
-                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                                 <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                 <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} />
-                                 <Tooltip
-                                    cursor={{ fill: '#ffffff05' }}
-                                    contentStyle={{ backgroundColor: '#1e1b4b', border: '1px solid #ffffff10', borderRadius: '8px' }}
-                                 />
-                                 <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                 <Bar dataKey="prec" name="Precision" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                 <Bar dataKey="recall" name="Recall" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                                 <Bar dataKey="f1" name="F1 Score" fill="#ec4899" radius={[4, 4, 0, 0]} />
-                              </BarChart>
-                           </ResponsiveContainer>
-                        </div>
-
-                        {/* Confusion Matrix Visualization (Mock) */}
-                        <div className="glass-card p-6 lg:col-span-2">
-                           <h3 className="text-lg font-bold text-white mb-6 pl-2 border-l-4 border-orange-500">Confusion Matrix Heatmap</h3>
-                           <div className="grid grid-cols-2 gap-8">
-                              <div className="flex items-center justify-center p-8 bg-white/5 rounded-2xl relative overflow-hidden">
-                                 <div className="text-center z-10">
-                                    <div className="text-5xl font-bold text-green-400 mb-2">True Positives</div>
-                                    <div className="text-2xl text-white">452</div>
-                                    <div className="text-xs text-slate-400 mt-2">Correctly identified high-risk events</div>
-                                 </div>
-                                 <div className="absolute inset-0 bg-green-500/10 blur-3xl"></div>
-                              </div>
-                              <div className="flex items-center justify-center p-8 bg-white/5 rounded-2xl relative overflow-hidden">
-                                 <div className="text-center z-10">
-                                    <div className="text-5xl font-bold text-blue-400 mb-2">True Negatives</div>
-                                    <div className="text-2xl text-white">1,203</div>
-                                    <div className="text-xs text-slate-400 mt-2">Correctly ignored safe baselines</div>
-                                 </div>
-                                 <div className="absolute inset-0 bg-blue-500/10 blur-3xl"></div>
-                              </div>
-                           </div>
-                        </div>
-
-                     </div>
-                  </div>
-               </div>
-            </div>
-         )}
-
-         {/* Intervention Modal */}
+         {/* ── Intervention Modal ─────────────────────────────────────── */}
          {activeIntervention && (
             <InterventionModal
                type={activeIntervention}
                onClose={() => setActiveIntervention(null)}
             />
+         )}
+
+         {/* ── METRICS MODAL ─────────────────────────────────────────── */}
+         {showMetricsModal && (
+            <div style={{
+               position: 'fixed', inset: 0, zIndex: 100,
+               display: 'flex', alignItems: 'center', justifyContent: 'center',
+               background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
+               padding: 16,
+            }} onClick={() => setShowMetricsModal(false)}>
+               <div
+                  style={{
+                     background: 'rgba(12, 8, 30, 0.98)',
+                     width: '100%', maxWidth: 900,
+                     borderRadius: 24, border: '1px solid rgba(255,255,255,0.08)',
+                     overflow: 'hidden', maxHeight: '90vh',
+                     boxShadow: '0 40px 80px rgba(0,0,0,0.6)',
+                  }}
+                  onClick={e => e.stopPropagation()}
+               >
+                  {/* Modal Header */}
+                  <div style={{ padding: '24px 28px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <Logo />
+                        <div>
+                           <h2 style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>Model Performance Metrics</h2>
+                           <p style={{ fontSize: 12, color: 'rgba(148,163,184,0.5)' }}>Real-time accuracy, precision & recall analysis</p>
+                        </div>
+                     </div>
+                     <button
+                        onClick={() => setShowMetricsModal(false)}
+                        style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+                     >✕</button>
+                  </div>
+
+                  <div style={{ padding: 28, overflowY: 'auto', maxHeight: 'calc(90vh - 80px)' }}>
+                     {/* Stat tiles */}
+                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
+                        {[
+                           { label: 'Accuracy', value: '95.4%', delta: '↑ 2.1%', color: '#34d399' },
+                           { label: 'Precision', value: '93.2%', delta: 'High Confidence', color: '#60a5fa' },
+                           { label: 'Recall', value: '96.1%', delta: 'Minimal Misses', color: '#a78bfa' },
+                           { label: 'F1 Score', value: '94.6%', delta: 'Balanced', color: '#f472b6' },
+                        ].map(m => (
+                           <div key={m.label} style={{
+                              padding: '18px 16px', borderRadius: 14, textAlign: 'center',
+                              background: 'rgba(255,255,255,0.02)', border: `1px solid ${m.color}30`,
+                              borderTopWidth: 3,
+                           }}>
+                              <div style={{ fontSize: 11, color: 'rgba(148,163,184,0.5)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{m.label}</div>
+                              <div style={{ fontSize: 30, fontWeight: 700, color: '#f0f4f8', lineHeight: 1, marginBottom: 4 }}>{m.value}</div>
+                              <div style={{ fontSize: 11, color: m.color }}>{m.delta}</div>
+                           </div>
+                        ))}
+                     </div>
+
+                     {/* Charts */}
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                        <div style={{ padding: 20, borderRadius: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                           <h4 style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', marginBottom: 16, paddingLeft: 10, borderLeft: '3px solid #06B6D4' }}>
+                              Accuracy Over Time
+                           </h4>
+                           <ResponsiveContainer width="100%" height={200}>
+                              <AreaChart data={timeSeriesData}>
+                                 <defs>
+                                    <linearGradient id="accGrad" x1="0" y1="0" x2="0" y2="1">
+                                       <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.3} />
+                                       <stop offset="95%" stopColor="#06B6D4" stopOpacity={0} />
+                                    </linearGradient>
+                                 </defs>
+                                 <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                                 <XAxis dataKey="time" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
+                                 <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} domain={[80, 100]} />
+                                 <Tooltip contentStyle={tooltipStyle} />
+                                 <Area type="monotone" dataKey="acc" stroke="#06B6D4" strokeWidth={2.5} fill="url(#accGrad)" name="Accuracy %" />
+                              </AreaChart>
+                           </ResponsiveContainer>
+                        </div>
+
+                        <div style={{ padding: 20, borderRadius: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                           <h4 style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', marginBottom: 16, paddingLeft: 10, borderLeft: '3px solid #7C3AED' }}>
+                              Model Comparison
+                           </h4>
+                           <ResponsiveContainer width="100%" height={200}>
+                              <BarChart data={performanceData} barGap={4} barCategoryGap="25%">
+                                 <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                                 <XAxis dataKey="name" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
+                                 <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} domain={[0, 100]} />
+                                 <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                                 <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
+                                 <Bar dataKey="prec" name="Precision" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                 <Bar dataKey="recall" name="Recall" fill="#7C3AED" radius={[4, 4, 0, 0]} />
+                                 <Bar dataKey="f1" name="F1 Score" fill="#EC4899" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                           </ResponsiveContainer>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </div>
          )}
       </div>
    );

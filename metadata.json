@@ -1,5 +1,5 @@
 {
-  "name": "AddictiveCare (IntelliHeal)",
+  "name": "IntelliHeal",
   "description": "AI-Based Personalized Addiction Recovery Platform featuring real-time risk assessment, ML model validation, and telehealth capabilities.",
   "requestFramePermissions": [
     "camera",

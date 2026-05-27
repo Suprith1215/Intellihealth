@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Registration from './components/Registration';
@@ -15,6 +14,7 @@ import Profile from './components/Profile';
 import Settings from './components/Settings';
 import ProgressTracker from './components/ProgressTracker'; // Import new component
 import MusicTherapy from './components/MusicTherapy';
+import WeeklyReportSetup from './components/WeeklyReportSetup';
 import { TherapistDashboard } from './components/TherapistDashboard';
 import { AssessmentResult, SurveyData, UserProfile } from './types';
 import { db } from './services/databaseService';
@@ -60,7 +60,32 @@ const App: React.FC = () => {
   };
 
   if (activeTab === 'loading') {
-    return <div className="min-h-screen bg-[#0f0a1e] flex items-center justify-center text-white">Loading...</div>;
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#080612',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 20,
+      }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%',
+          border: '2.5px solid rgba(124,58,237,0.15)',
+          borderTopColor: '#7C3AED', borderRightColor: '#06B6D4',
+          animation: 'spin 0.9s linear infinite',
+        }} />
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em',
+            background: 'linear-gradient(135deg, #a78bfa, #38bdf8)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text', marginBottom: 4,
+          }}>IntelliHeal</div>
+          <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.4)', letterSpacing: '0.08em' }}>
+            INITIALIZING AI SYSTEMS…
+          </div>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   }
 
   // Registration Page (No Layout)
@@ -83,8 +108,10 @@ const App: React.FC = () => {
         return <ProgressTracker />;
       case 'health-reports':
         return <HealthReportAnalyzer />;
+      case 'weekly-reports':
+        return <WeeklyReportSetup />;
       case 'chatbot':
-        return <ChatBot />;
+        return <ChatBot onNavigate={setActiveTab} />;
       case 'ml-lab':
         return <MLValidationLab />;
       case 'telehealth':

@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Utensils, Activity,
   Leaf, Pill, CheckSquare,
-  Play, X, Brain, Video, Shuffle, Droplet, Bell, Volume2, Gamepad2
+  Play, X, Brain, Video, Shuffle, Droplet, Bell, Volume2, Gamepad2, Sparkles, Zap
 } from 'lucide-react';
 import { genAiService } from '../services/genAiService';
 import { WellnessPlanResult } from '../services/mockWellnessService';
+import { youtubeExerciseService, ExerciseVideo } from '../services/youtubeExerciseService';
 import RecoveryWarriorGame from './RecoveryWarriorGame';
 import JournalTracker from './JournalTracker';
 
@@ -32,39 +33,9 @@ const FALLBACK_PLAN: WellnessPlanResult = {
 };
 
 /**
- * VERIFIED & TESTED EXERCISE DATABASE
- * All videos confirmed playable and embeddable
+ * Exercise videos are now dynamically loaded from exerciseVideoService
+ * This allows for better maintainability and future API integration
  */
-const EXERCISE_DATABASE = [
-  // --- CARDIO ---
-  { id: 101, name: "15 Min Fat Burn", type: "Cardio", videoId: "ml6cT4AZdqI", intensity: "High" },
-  { id: 102, name: "Low Impact Cardio", type: "Cardio", videoId: "kAU_8m_U3P8", intensity: "Medium" },
-  { id: 103, name: "10 Min HIIT Burn", type: "Cardio", videoId: "Vd9PjYv48X8", intensity: "High" },
-  { id: 104, name: "Walking Home Workout", type: "Cardio", videoId: "ml6cT4AZdqI", intensity: "Low" },
-  { id: 105, name: "Tabata Quick Blast", type: "Cardio", videoId: "Rw3T2_2NS_M", intensity: "High" },
-  { id: 106, name: "Dance Cardio Session", type: "Cardio", videoId: "Nm8wdcZptlw", intensity: "Medium" },
-
-  // --- STRENGTH ---
-  { id: 201, name: "Bodyweight Strength", type: "Strength", videoId: "UItWltVZZmE", intensity: "Medium" },
-  { id: 202, name: "Beginner Weight Training", type: "Strength", videoId: "N1e-3XJ9Z0A", intensity: "Low" },
-  { id: 203, name: "Upper Body Sculpt", type: "Strength", videoId: "hAGfBjvIRFI", intensity: "Medium" },
-  { id: 204, name: "Ab Core Foundation", type: "Strength", videoId: "dJlFmxiL11s", intensity: "Medium" },
-  { id: 205, name: "Full Body Resistance", type: "Strength", videoId: "95846CBGUvM", intensity: "High" },
-
-  // --- YOGA ---
-  { id: 301, name: "Yoga for Beginners", type: "Yoga", videoId: "v7AYKMP6bjM", intensity: "Low" },
-  { id: 302, name: "Morning Yoga Flow", type: "Yoga", videoId: "4pKly2JojMw", intensity: "Low" },
-  { id: 303, name: "Stress Relief Yoga", type: "Yoga", videoId: "s2h4Jq1fC2Y", intensity: "Low" },
-  { id: 304, name: "Bedtime Yin Yoga", type: "Yoga", videoId: "BiWDsfZ3zbo", intensity: "Low" },
-  { id: 305, name: "Anxiety Relief Flow", type: "Yoga", videoId: "bJJWArRfKa0", intensity: "Low" },
-
-  // --- STRETCHING ---
-  { id: 401, name: "Full Body Deep Stretch", type: "Stretching", videoId: "g_tea8ZNk5A", intensity: "Low" },
-  { id: 402, name: "Morning Routine Stretch", type: "Stretching", videoId: "L_xrDAtykMI", intensity: "Low" },
-  { id: 403, name: "Flexibility Routine", type: "Stretching", videoId: "q_v4S61xL-w", intensity: "Low" },
-  { id: 404, name: "Tension Release", type: "Stretching", videoId: "X3-gKAn619k", intensity: "Low" },
-  { id: 405, name: "Hip & Back Opening", type: "Stretching", videoId: "NInGto_jU8A", intensity: "Low" },
-];
 
 interface Medication {
   id: string; name: string; dosage: string; time: string; taken: boolean;
@@ -168,11 +139,21 @@ const VideoItem: React.FC<VideoItemProps> = ({ ex, onClick, isPlaying, onExpand 
       onClick={onClick}
       className="flex items-center gap-3 bg-white/5 hover:bg-white/10 p-3 rounded-xl cursor-pointer transition-all group"
     >
-      <div className="relative w-16 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-slate-800">
+      <div className="relative w-16 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-purple-900/50 to-pink-900/50">
         <img
-          src={`https://i.ytimg.com/vi/${ex.videoId}/mqdefault.jpg`}
+          src={`https://img.youtube.com/vi/${ex.videoId}/hqdefault.jpg`}
           alt={ex.name}
           className="w-full h-full object-cover"
+          onError={(e) => {
+            // Fallback to medium quality if high quality fails
+            const target = e.target as HTMLImageElement;
+            if (target.src.includes('hqdefault')) {
+              target.src = `https://img.youtube.com/vi/${ex.videoId}/mqdefault.jpg`;
+            } else if (target.src.includes('mqdefault')) {
+              // Final fallback to default thumbnail
+              target.src = `https://img.youtube.com/vi/${ex.videoId}/default.jpg`;
+            }
+          }}
         />
         <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/10 transition-colors">
           <Play className="w-4 h-4 text-white fill-current" />
@@ -299,14 +280,44 @@ const WellnessPlan: React.FC = () => {
     }
   };
 
+  // Dynamic Exercise Loading
+  const [exerciseVideos, setExerciseVideos] = useState<ExerciseVideo[]>([]);
+  const [randomSuggestion, setRandomSuggestion] = useState<ExerciseVideo | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<ExerciseVideo['type'] | 'All'>('All');
+  const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
+
+  // Load exercises from service
+  useEffect(() => {
+    const loadExercises = async () => {
+      const videos = await youtubeExerciseService.getAllExercises();
+      setExerciseVideos(videos);
+    };
+    loadExercises();
+  }, []);
+
+  // Get random suggestion
+  const handleRandomSuggestion = async () => {
+    setIsLoadingSuggestion(true);
+    const category = selectedCategory === 'All' ? undefined : selectedCategory;
+    const suggestion = await youtubeExerciseService.getRandomExercise(category);
+
+    // Smooth transition
+    setTimeout(() => {
+      setRandomSuggestion(suggestion);
+      setIsLoadingSuggestion(false);
+      // Auto-play the suggested video
+      setSelectedVideo({ id: suggestion.videoId, title: suggestion.name });
+    }, 500);
+  };
+
   // Personalized Random Exercise Selection Logic
   const prescribedExercises = useMemo(() => {
-    const shuffle = (array: any[]) => [...array].sort(() => Math.random() - 0.5);
+    const shuffle = (array: ExerciseVideo[]) => [...array].sort(() => Math.random() - 0.5);
 
-    let categories: string[] = ["Cardio", "Strength", "Yoga", "Stretching"];
+    let categories: Array<ExerciseVideo['type']> = ["Cardio", "Strength", "Yoga", "Stretching"];
 
     return categories.map(cat => {
-      let pool = EXERCISE_DATABASE.filter(ex => ex.type === cat);
+      let pool = exerciseVideos.filter(ex => ex.type === cat);
 
       if (cat === 'Yoga' && stress > 6) pool = shuffle(pool);
       if (cat === 'Cardio' && energy > 7) pool = shuffle(pool);
@@ -316,7 +327,7 @@ const WellnessPlan: React.FC = () => {
         items: shuffle(pool).slice(0, 2)
       };
     });
-  }, [mood, stress, energy, randomSeed]);
+  }, [exerciseVideos, mood, stress, energy, randomSeed]);
 
   useEffect(() => {
     setIsGenerating(true);
@@ -360,28 +371,41 @@ const WellnessPlan: React.FC = () => {
         </div>
       )}
 
-      {/* Brand Header */}
-      <div className="flex items-center justify-between py-6 border-b border-white/5">
-        <div className="flex items-center gap-5">
-          <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-[1.2rem] flex items-center justify-center shadow-2xl shadow-purple-500/20">
-            <Activity className="text-white w-8 h-8" />
+      {/* Brand Header - Cyberpunk Style */}
+      <div className="flex items-center justify-between py-8 border-b border-purple-500/20 relative">
+        {/* Glow effect background */}
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-pink-500/5 to-cyan-500/5 blur-3xl"></div>
+
+        <div className="flex items-center gap-5 relative z-10">
+          <div className="w-16 h-16 bg-gradient-to-br from-purple-600 via-pink-600 to-cyan-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-purple-500/40 animate-pulse-glow">
+            <Activity className="text-white w-9 h-9" />
           </div>
           <div>
-            <h1 className="text-4xl font-black text-white tracking-tighter leading-none">ADDICTIVE<span className="text-cyan-400">CARE</span></h1>
-            <p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.4em] mt-2">Neuro-Adaptive Intelligence</p>
+            <h1 className="text-5xl font-black text-white tracking-tight leading-none" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+              <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(168,85,247,0.5)]">
+                IntelliHeal
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.4em] mt-2 flex items-center gap-2">
+              <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse shadow-[0_0_10px_rgba(34,211,238,0.8)]"></span>
+              AI-Powered Wellness Platform
+            </p>
+            <p className="text-sm text-slate-500 italic mt-3 font-light tracking-wide">
+              "An AI-Based System for Drug Addiction Recovery and Relapse Prevention"
+            </p>
           </div>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 relative z-10">
           <button
             onClick={() => setShowGame(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-2xl text-white transition-all group shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:scale-105"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-2xl text-white transition-all group shadow-[0_0_25px_rgba(234,88,12,0.5)] hover:scale-105 hover:shadow-[0_0_35px_rgba(234,88,12,0.7)] border border-orange-500/30"
           >
             <Gamepad2 className="w-5 h-5 group-hover:rotate-12 transition-transform" />
             <span className="text-xs font-black uppercase tracking-widest">Play Recovery Warrior</span>
           </button>
           <button
             onClick={() => setRandomSeed(prev => prev + 1)}
-            className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 text-white transition-all group"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600/20 to-cyan-600/20 hover:from-purple-600/30 hover:to-cyan-600/30 rounded-2xl border border-purple-500/30 text-white transition-all group backdrop-blur-sm hover:scale-105 shadow-[0_0_15px_rgba(168,85,247,0.3)]"
           >
             <Shuffle className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
             <span className="text-xs font-black uppercase tracking-widest">Re-Calibrate</span>
@@ -490,9 +514,77 @@ const WellnessPlan: React.FC = () => {
         {/* Exercise Section */}
         <div className="lg:col-span-8 bg-[#2a1157] rounded-3xl p-8 border border-white/5 shadow-2xl">
 
-          <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/5">
-            <Video className="text-purple-400 w-5 h-5" />
-            <h2 className="text-xl font-bold text-white">Exercise Video Guides</h2>
+          <div className="flex items-center justify-between gap-3 mb-8 pb-4 border-b border-white/5">
+            <div className="flex items-center gap-3">
+              <Video className="text-purple-400 w-5 h-5" />
+              <h2 className="text-xl font-bold text-white">Exercise Video Guides</h2>
+            </div>
+          </div>
+
+          {/* Random Suggestion Feature */}
+          <div className="mb-8 p-6 bg-gradient-to-r from-purple-900/20 via-pink-900/20 to-cyan-900/20 rounded-2xl border border-purple-500/30 backdrop-blur-sm relative overflow-hidden">
+            {/* Glow effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-cyan-500/10 blur-2xl"></div>
+
+            <div className="relative z-10">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2 mb-1">
+                    <Sparkles className="w-5 h-5 text-cyan-400 animate-pulse" />
+                    AI-Powered Workout Suggestion
+                  </h3>
+                  <p className="text-xs text-slate-400">Get a personalized random workout based on your preferences</p>
+                </div>
+
+                {/* Category Filter */}
+                <div className="flex gap-2 flex-wrap">
+                  {['All', 'Cardio', 'Strength', 'Yoga', 'Stretching'].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat as any)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${selectedCategory === cat
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.5)]'
+                        : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+                        }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={handleRandomSuggestion}
+                disabled={isLoadingSuggestion}
+                className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-600 hover:from-purple-500 hover:via-pink-500 hover:to-cyan-500 text-white font-black rounded-2xl transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_30px_rgba(168,85,247,0.6)] hover:shadow-[0_0_40px_rgba(168,85,247,0.8)] flex items-center justify-center gap-3 group relative overflow-hidden"
+              >
+                {/* Shimmer effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"></div>
+
+                <Zap className={`w-5 h-5 ${isLoadingSuggestion ? 'animate-spin' : 'group-hover:rotate-12'} transition-transform relative z-10`} />
+                <span className="uppercase tracking-widest text-sm relative z-10">
+                  {isLoadingSuggestion ? 'Finding Perfect Workout...' : 'Suggest Random Workout'}
+                </span>
+              </button>
+
+              {randomSuggestion && !isLoadingSuggestion && (
+                <div className="mt-4 p-4 bg-white/5 rounded-xl border border-cyan-500/30 animate-slide-up">
+                  <p className="text-xs text-slate-400 mb-2">✨ Suggested for you:</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-white font-bold">{randomSuggestion.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {randomSuggestion.type} • {randomSuggestion.intensity} Intensity
+                        {randomSuggestion.duration && ` • ${randomSuggestion.duration} min`}
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 text-xs font-bold rounded-lg border border-cyan-500/30">
+                      Playing Now
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {isGenerating ? (
@@ -501,23 +593,10 @@ const WellnessPlan: React.FC = () => {
               <p className="text-cyan-400 font-bold uppercase tracking-widest text-xs">Loading Sessions...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-10">
-              {prescribedExercises.map(section => (
-                <div key={section.category} className="space-y-4">
-                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide mb-4">{section.category}</h3>
-                  <div className="space-y-3">
-                    {section.items.map(ex => (
-                      <VideoItem
-                        key={ex.id}
-                        ex={ex}
-                        isPlaying={inlinePlayingId === ex.id}
-                        onClick={() => handleVideoClick(ex.id, ex.videoId, ex.name)}
-                        onExpand={() => handleExpandToModal(ex.videoId, ex.name)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div className="text-center py-20">
+              <Sparkles className="w-16 h-16 text-purple-400 mx-auto mb-4 animate-pulse" />
+              <h3 className="text-2xl font-bold text-white mb-2">Use AI Workout Suggester Above</h3>
+              <p className="text-slate-400">Click "Suggest Random Workout" to get your personalized exercise video</p>
             </div>
           )}
         </div>

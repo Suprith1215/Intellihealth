@@ -31,7 +31,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#1a1429] border-r border-white/5 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col`}>
         <div className="flex items-center h-20 px-6 border-b border-white/5">
           <ShieldCheck className="w-8 h-8 text-purple-500 mr-3" />
-          <h1 className="text-xl font-bold tracking-wide text-white">AddictiveCare</h1>
+          <h1 className="text-xl font-bold tracking-wide text-white">IntelliHeal</h1>
         </div>
 
         <nav className="flex-1 mt-6 px-3 space-y-1 overflow-y-auto">
@@ -42,13 +42,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
                 onTabChange(item.id);
                 setIsSidebarOpen(false);
               }}
-              className={`flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                activeTab === item.id
+              className={`flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${activeTab === item.id
                   ? 'bg-purple-600 shadow-lg shadow-purple-900/50 text-white'
-                  : item.id === 'developer' 
+                  : item.id === 'developer'
                     ? 'text-teal-400 hover:bg-white/5'
                     : 'text-slate-400 hover:bg-white/5 hover:text-white'
-              }`}
+                }`}
             >
               <item.icon className={`w-5 h-5 mr-3 ${activeTab === item.id ? 'text-white' : 'text-slate-500'}`} />
               {item.label}
@@ -62,8 +61,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         {/* Mobile Header */}
         <header className="flex items-center justify-between p-4 bg-[#1a1429] border-b border-white/5 md:hidden">
           <div className="flex items-center">
-             <ShieldCheck className="w-6 h-6 text-purple-500 mr-2" />
-             <span className="font-bold text-white">AddictiveCare</span>
+            <ShieldCheck className="w-6 h-6 text-purple-500 mr-2" />
+            <span className="font-bold text-white">IntelliHeal</span>
           </div>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-md text-slate-400 hover:bg-white/10">
             <Menu className="w-6 h-6" />
