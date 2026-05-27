@@ -3,4 +3,4 @@ services:
     name: intelliheal
     runtime: python
     buildCommand: ./render-build.sh
-    startCommand: gunicorn --chdir server app:app
+    startCommand: gunicorn server.app:app
