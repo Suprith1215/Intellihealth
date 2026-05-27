@@ -483,5 +483,7 @@ def get_language_instruction(language_code: str) -> str:
     
     return language_map.get(language_code, 'Respond in English.')
 
+handler = app
+
 if __name__ == "__main__":
     app.run(debug=False, port=5000)

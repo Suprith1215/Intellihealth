@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: intelliheal
-    runtime: python
-    buildCommand: ./render-build.sh
-    startCommand: gunicorn server.app:app
